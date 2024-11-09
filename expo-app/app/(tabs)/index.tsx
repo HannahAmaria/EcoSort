@@ -1,81 +1,91 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useLayoutEffect } from 'react';
 import 'react-native-get-random-values';
-
-import { View, Image, StyleSheet, Text, TouchableOpacity, Modal } from 'react-native';
+import { View, Image, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-
 import * as FileSystem from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
-
-import { Amplify, Storage, Predictions } from 'aws-amplify';
+import { Amplify, Predictions } from 'aws-amplify';
 import { AmazonAIPredictionsProvider } from '@aws-amplify/predictions';
-
-import awsmobile from '../../aws-exports';
-
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getRecyclingInfo } from '../../utils/recyclingMap';
+import BottomCameraButton from '../../components/BottomCameraButton';
+import { Ionicons } from '@expo/vector-icons';
+import awsmobile from '../../aws-exports';
+import { ReadableStream } from 'web-streams-polyfill';
 
-// Amplify.configure(awsmobile);
+// Configure ReadableStream polyfill
+(global as any).ReadableStream = ReadableStream;
 
-// Configure Amplify with AWS settings
+// AWS Amplify Configuration
 Amplify.configure({
   ...awsmobile,
   Storage: {
     AWSS3: {
       bucket: 'recyapps3bucketf5878-dev',
       region: 'us-east-1',
-    },
-    // If needed, add other storage configurations here
+    }
   },
   Auth: {
-    // Other Auth configurations
     storage: AsyncStorage,
   },
   Predictions: {
-    region: 'us-east-1', // Make sure this matches your AWS region
+    region: 'us-east-1',
   },
 });
 
-// Add polyfill for ReadableStream to ensure compatibility
-import { ReadableStream } from 'web-streams-polyfill';
-(global as any).ReadableStream = ReadableStream;
-
-// Configure the Predictions provider
+// Initialize AWS Predictions
 Predictions.addPluggable(new AmazonAIPredictionsProvider());
 
-// Define your RootStackParamList
-type RootStackParamList = {
-  two: { detectedLabels: Array<{ name: string; boundingBoxes: any; metadata?: Object }> };
-  // Add other screen names and their params here
+// Types
+type DetectedLabel = {
+  name: string;
+  boundingBoxes: any;
+  metadata?: Object;
 };
 
 /**
- * Function to detect labels in an image using AWS Predictions.
- * @param imageBytes The image data as an ArrayBuffer.
- * @returns The result of the label detection.
+ * Stores detected labels with recycling information in AsyncStorage
+ */
+const storeLabels = async (labels: DetectedLabel[]) => {
+  try {
+    const existingLabelsString = await AsyncStorage.getItem('detectedLabels');
+    const existingLabels = existingLabelsString ? JSON.parse(existingLabelsString) : [];
+    
+    const labelsWithRecycling = labels.map(label => ({
+      ...label,
+      recyclingInfo: getRecyclingInfo(label.name)
+    }));
+    
+    const labelEntry = {
+      timestamp: new Date().toISOString(),
+      labels: labelsWithRecycling
+    };
+    
+    await AsyncStorage.setItem('detectedLabels', 
+      JSON.stringify([...existingLabels, labelEntry])
+    );
+  } catch (error) {
+    console.error('Error storing labels:', error);
+  }
+};
+
+/**
+ * Detects labels in an image using AWS Predictions
  */
 const detectLabels = async (imageBytes: ArrayBuffer) => {
   try {
     const result = await Predictions.identify({
       labels: {
-        source: {
-          bytes: imageBytes
-        },
+        source: { bytes: imageBytes },
         type: "LABELS"
       }
     });
 
-    console.log("Detected labels:", result);
-
-    if (result && result.labels) {
-      result.labels.forEach((object: { name: string; boundingBoxes: any }) => {
-        const { name, boundingBoxes } = object;
-        // You can add further processing here if needed
+    if (result?.labels) {
+      result.labels.forEach(({ name, boundingBoxes }) => {
         console.log(`Label: ${name}, Bounding Boxes:`, boundingBoxes);
       });
-    } else {
-      console.log("No labels detected");
     }
 
     return result;
@@ -86,10 +96,7 @@ const detectLabels = async (imageBytes: ArrayBuffer) => {
 };
 
 /**
- * Function to resize an image using Expo ImageManipulator.
- * @param uri The URI of the image to resize.
- * @returns The URI of the resized image.
- * This is necessary to reduce the size of the image before sending it to AWS Predictions otherwise it will fail.
+ * Resizes image to optimize for AWS Predictions
  */
 const resizeImage = async (uri: string): Promise<string> => {
   const result = await ImageManipulator.manipulateAsync(
@@ -101,35 +108,34 @@ const resizeImage = async (uri: string): Promise<string> => {
 };
 
 /**
- * Main component for the camera screen.
+ * Main Camera Screen Component
  */
-export default function ACameraScreenpp() {
-  // State variables
+export default function CameraScreen() {
+  // State
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [facing, setFacing] = useState<CameraType>('back');
   const [permission, requestPermission] = useCameraPermissions();
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [detectedLabels, setDetectedLabels] = useState<Array<{ name: string; boundingBoxes: any; metadata?: Object }>>([]);
 
-  // Refs for camera and container
-  const cameraContainerRef = useRef<View>(null);
+  // Refs
   const cameraRef = useRef<CameraView | null>(null);
+  const navigation = useNavigation();
 
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  // Hide tab bar and header
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      tabBarStyle: { display: 'none' },
+      headerShown: false,
+    });
+  }, [navigation]);
 
-  // Check if camera permissions are loaded
-  if (!permission) {
-    // Camera permissions are still loading.
-    return <View />;
-  }
-
-  // Check if camera permissions are granted
+  // Permission handling
+  if (!permission) return <View />;
+  
   if (!permission.granted) {
-    // Camera permissions are not granted yet.
     return (
       <View style={styles.container}>
-        <Text style={styles.message}>We need your permission to show the camera</Text>
+        <Text style={styles.message}>Camera permission required</Text>
         <TouchableOpacity onPress={requestPermission} style={styles.button}>
           <Text style={styles.text}>Grant Permission</Text>
         </TouchableOpacity>
@@ -138,152 +144,185 @@ export default function ACameraScreenpp() {
   }
 
   /**
- * Function to toggle the camera facing.
- */
-  function toggleCameraFacing() {
+   * Camera control functions
+   */
+  const toggleCameraFacing = () => {
     setFacing(current => (current === 'back' ? 'front' : 'back'));
-  }
+  };
 
-  /**
- * Function to take a picture using the camera.
- */
-  async function takePicture() {
+  const takePicture = async () => {
     if (cameraRef.current) {
       const photo = await cameraRef.current.takePictureAsync();
-      if (photo) {
-        setImageUri(photo.uri);
-      }
+      if (photo) setImageUri(photo.uri);
     }
-  }
+  };
 
   /**
- * Function to analyze the captured image.
- */
-  async function analyseImage() {
-    if (imageUri) {
-      console.log("Image URI:", imageUri);
+   * Image analysis handler
+   */
+  const analyseImage = async () => {
+    if (!imageUri) return;
 
-      try {
-        const resizedImageUri = await resizeImage(imageUri);
+    try {
+      // Prepare image for analysis
+      const resizedImageUri = await resizeImage(imageUri);
+      const imageBase64 = await FileSystem.readAsStringAsync(resizedImageUri, { 
+        encoding: 'base64' 
+      });
 
-        // Read the resized image as a base64 string
-        const imageBase64 = await FileSystem.readAsStringAsync(resizedImageUri, { encoding: 'base64' });
-
-        // Log the length of the base64 string to understand its size
-        console.log("Base64 Length:", imageBase64.length);
-
-        // Convert the base64 string to an ArrayBuffer
-        const binaryString = atob(imageBase64);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        const imageBytes = bytes.buffer;
-
-        console.log("ArrayBuffer Length:", imageBytes.byteLength);
-
-        const labels = await detectLabels(imageBytes);
-        console.log("Analysis complete:", labels);
-
-        // Show success message to the user
-        alert("Image analysis complete!");
-        
-        // Navigate to the TabTwoScreen with the detected labels
-        navigation.navigate('two', { detectedLabels: labels.labels || [] });
-
-      } catch (error) {
-        console.error("Error analyzing image:", error);
-        
-        // Show error message to the user
-        if (error instanceof Error && error.name === 'AccessDeniedException') {
-          alert("Access denied. Please check your AWS permissions.");
-        } else {
-          alert("An error occurred while analyzing the image. Please try again.");
-        }
+      // Convert to ArrayBuffer
+      const binaryString = atob(imageBase64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
       }
+
+      // Detect and process labels
+      const labels = await detectLabels(bytes.buffer);
+      await storeLabels(labels.labels || []);
+
+      // Navigate to results with the image URI
+      navigation.navigate('analysis-complete', { 
+        detectedLabels: labels.labels?.map(label => ({
+          ...label,
+          boundingBoxes: {
+            ...label.boundingBoxes,
+            image: imageUri
+          },
+          recyclingInfo: getRecyclingInfo(label.name)
+        })) || []
+      });
+
+    } catch (error) {
+      console.error("Error analyzing image:", error);
+      alert(error instanceof Error && error.name === 'AccessDeniedException'
+        ? "Access denied. Check AWS permissions."
+        : "Analysis failed. Please try again.");
     }
-  }
+  };
+
+  /**
+   * Render functions
+   */
+  const renderPreview = () => {
+    if (imageUri) {
+      return (
+        <View style={styles.previewContainer}>
+          <Text style={styles.headerText}>Scan</Text>
+          <Image source={{ uri: imageUri }} style={styles.previewImage} />
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={() => setImageUri(null)}
+            >
+              <Text style={styles.buttonText}>Retake</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={analyseImage}
+            >
+              <Text style={styles.buttonText}>Analyze</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.container}>
+        <CameraView
+          style={styles.camera}
+          facing={facing}
+          ref={cameraRef}
+          onCameraReady={() => setIsCameraReady(true)}
+        >
+          <TouchableOpacity 
+            style={styles.flipButton}
+            onPress={toggleCameraFacing}
+          >
+            <Ionicons name="camera-reverse" size={50} color="#4CAF50" />
+          </TouchableOpacity>
+        </CameraView>
+      </View>
+    );
+  };
 
   return (
-    <View style={{ flex: 1 }}>
-      <CameraView
-        style={styles.camera}
-        facing={facing}
-        ref={cameraRef}
-        onCameraReady={() => setIsCameraReady(true)}
-      >
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.button} onPress={toggleCameraFacing}>
-            <Text style={styles.text}>Flip Camera</Text>
-          </TouchableOpacity>
-        </View>
-      </CameraView>
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity onPress={takePicture} style={styles.button} disabled={!isCameraReady}>
-          <Text style={styles.text}>Take Picture</Text>
-        </TouchableOpacity>
-      </View>
-      {imageUri && (
-        <>
-          <TouchableOpacity onPress={() => setIsModalVisible(true)}>
-            <Image source={{ uri: imageUri }} style={{ width: 100, height: 100 }} />
-          </TouchableOpacity>
-          <Modal
-            visible={isModalVisible}
-            transparent={true}
-            onRequestClose={() => setIsModalVisible(false)}
-          >
-            <View style={styles.modalContainer}>
-              <Image source={{ uri: imageUri }} style={styles.fullImage} />
-              <TouchableOpacity onPress={() => setIsModalVisible(false)} style={styles.closeButton}>
-                <Text style={styles.text}>Close</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={analyseImage} style={styles.analyseButton}>
-                <Text style={styles.text}>Analyse</Text>
-              </TouchableOpacity>
-            </View>
-          </Modal>
-        </>
-      )}
+    <View style={styles.container}>
+      {renderPreview()}
+      <BottomCameraButton 
+        onTakePhoto={takePicture}
+        isCameraReady={isCameraReady}
+      />
     </View>
   );
-};
+}
 
 // Styles for the components
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  scrollView: {
+    flex: 1,
+    marginBottom: 100, // Add bottom margin to prevent content from being hidden
+  },
+  camera: {
+    flex: 1,
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    flexDirection: 'column',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingBottom: 25,
+  },
+  flipButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    width: 60,
+    height: 60,
     justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+    // backgroundColor: 'white',
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  flipIcon: {
+    width: 84,
+    height: 84,
+    // tintColor: 'white',
+  },
+  captureButton: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  captureButtonInner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderColor: '#000',
   },
   message: {
     textAlign: 'center',
     paddingBottom: 10,
-  },
-  camera: {
-    height: 600, // Set the desired height in pixels
-  },
-  buttonContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    backgroundColor: 'transparent',
-    // margin: 64,
-  },
-  button: {
-    flex: 1,
-    alignSelf: 'flex-end',
-    alignItems: 'center',
-    // backgroundColor: '#2196F3',
-    padding: 10,
-    margin: 10,
-    borderRadius: 5,
-    height: 50,
-    backgroundColor: 'green'
-  },
-  text: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
   },
   modalContainer: {
     flex: 1,
@@ -303,7 +342,7 @@ const styles = StyleSheet.create({
     // backgroundColor: '#2196F3',
     padding: 10,
     borderRadius: 5,
-    backgroundColor: 'green'
+    backgroundColor: '#49a010'
   },
   analyseButton: {
     position: 'absolute',
@@ -312,6 +351,94 @@ const styles = StyleSheet.create({
     // backgroundColor: '#2196F3',
     padding: 10,
     borderRadius: 5,
-    backgroundColor: 'green'
+    backgroundColor: '#49a010'
+  },
+  text: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  button: {
+    flex: 1,
+    alignSelf: 'flex-end',
+    alignItems: 'center',
+    // backgroundColor: '#2196F3',
+    padding: 10,
+    margin: 10,
+    borderRadius: 5,
+    height: 50,
+    backgroundColor: '#49a010'
+  },
+  headerText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    color: 'white',
+    marginTop: 60,
+    marginBottom: 20,
+  },
+  previewImage: {
+    flex: 1,
+    width: '100%',
+    height: undefined,
+    backgroundColor: '#f0f0f0',
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 20,
+    paddingHorizontal: 40,
+    width: '100%',
+  },
+  actionButton: {
+    backgroundColor: '#49a010', // Green color
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 25,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  previewContainer: {
+    flex: 1,
+    backgroundColor: '#49a010',
+  },
+  previewImage: {
+    flex: 1,
+    width: '100%',
+    height: undefined,
+    backgroundColor: '#f0f0f0',
+    marginBottom: 20, // Add margin to create space for buttons
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 20,
+    marginBottom: 120, // Add margin to avoid overlap with bottom camera button
+    width: '100%',
+    position: 'absolute',
+    bottom: 0,
+  },
+  actionButton: {
+    backgroundColor: '#49a010',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 25,
+    minWidth: 120,
+    alignItems: 'center',
+    marginHorizontal: 10,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  content: {
+    flex: 1,
+    marginBottom: 100, // Add space for the bottom bar
   },
 });

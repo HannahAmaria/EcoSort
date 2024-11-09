@@ -5,46 +5,53 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
-
 import { useColorScheme } from '@/components/useColorScheme';
 
-export {
-  // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
-} from 'expo-router';
+// Prevent splash screen from auto-hiding
+SplashScreen.preventAutoHideAsync();
 
+// Export error boundary from expo-router
+export { ErrorBoundary } from 'expo-router';
+
+// Router settings
 export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
   initialRouteName: '(tabs)',
 };
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
-
 export default function RootLayout() {
+  // Load custom fonts and FontAwesome icons
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
     ...FontAwesome.font,
   });
 
-  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
+  // Handle font loading errors
   useEffect(() => {
     if (error) throw error;
   }, [error]);
 
+  // Initialize app resources
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
+    async function prepare() {
+      try {
+        // Add any resource loading here (e.g., API calls)
+        await Promise.all([]);
+      } catch (e) {
+        console.warn(e);
+      } finally {
+        await SplashScreen.hideAsync();
+      }
     }
-  }, [loaded]);
+    prepare();
+  }, []);
 
-  if (!loaded) {
-    return null;
-  }
+  // Don't render until fonts are loaded
+  if (!loaded) return null;
 
   return <RootLayoutNav />;
 }
 
+// Navigation wrapper component
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
 
