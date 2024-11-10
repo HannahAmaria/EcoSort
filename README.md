@@ -47,7 +47,7 @@
 <!--PROJECT DESCRIPTION-->
 ## About the Project
 <!-- header image of project -->
-![Mockup2](synk/assets/images/Mockup2.jpg)
+![Mockup2](expo-app/assets/images/Mockup2.jpg)
 
 ### Project Description
 
@@ -172,11 +172,11 @@ The `Development Process` is the technical implementations and functionality don
 
 ### Mockups
 
-![Mockup1](synk/assets/images/Mockup1.jpg)
+![Mockup1](expo-app/assets/images/Mockup1.jpg)
 <br>
-![Mockup2](synk/assets/images/Mockup2.jpg)
+![Mockup2](expo-app/assets/images/Mockup2.jpg)
 <br>
-![Mockup3](synk/assets/images/Mockup3.jpg)
+![Mockup3](expo-app/assets/images/Mockup3.jpg)
 <br>
 
 <!-- VIDEO DEMONSTRATION -->
