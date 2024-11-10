@@ -47,7 +47,7 @@
 <!--PROJECT DESCRIPTION-->
 ## About the Project
 <!-- header image of project -->
-![Mockup1](synk/assets/images/Mockup2.png)
+![Mockup2](synk/assets/images/Mockup2.jpg)
 
 ### Project Description
 
@@ -172,7 +172,7 @@ The `Development Process` is the technical implementations and functionality don
 
 ### Mockups
 
-![Mockup1](synk/assets/images/Mockup1.png)
+![Mockup1](synk/assets/images/Mockup1.jpg)
 <br>
 ![Mockup2](synk/assets/images/Mockup2.jpg)
 <br>
