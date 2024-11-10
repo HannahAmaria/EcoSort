@@ -11,7 +11,7 @@
       <a href="https://github.com/HannahAmaria/EcoSort/issues"><strong>Explore the docs »</strong></a>
    <br />
    <br />
-   <a href="https://drive.google.com/file/d/1jQEfhWcnwQMBhT9PAWrn_JWwpCxSVKzn/view?usp=sharing">View Demo</a>
+   <a href="https://drive.google.com/file/d/16jqp22bQMziuEHI0agvFeeEMqZeexKEo/view?usp=sharing">View Demo</a>
     ·
     <a href="https://github.com/HannahAmaria/EcoSort/issues">Report Bug</a>
     ·
@@ -181,7 +181,7 @@ The `Development Process` is the technical implementations and functionality don
 
 To see a run through of the application, click below:
 
-[View Demonstration](https://drive.google.com/file/d/1hrXlPQm_waY5H67_-hV0N54cOaK6-GcC/view?usp=sharing)
+[View Demonstration](https://drive.google.com/file/d/16jqp22bQMziuEHI0agvFeeEMqZeexKEo/view?usp=sharing)
 
 <!-- CONTRIBUTING -->
 ## Contributing
