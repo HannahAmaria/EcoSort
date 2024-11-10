@@ -134,7 +134,7 @@ The `Conceptual Process` is the set of actions, activities and research that was
 
 ### Wireframes
 
-![Wireframe1](expo-app/assets/images/Wireframe1.png)![Wireframe2](expo-app/assets/images/Wireframe2.png)![Wireframe3](expo-app/assets/images/Wireframe3.png)
+![Wireframe1](expo-app/assets/images/Wireframe1.png)![Wireframe2](expo-app/assets/images/Wireframe2.png)![Wireframe3](expo-app/assets/images/Wireframe3.png)!
 
 <!-- DEVELOPMENT PROCESS -->
 ## Development Process
