@@ -90,9 +90,10 @@ Change directory to the project folder:
    ```sh
    cd EcoSort
    ```
+    ```sh
    cd expo-app
    ```
-
+  
 4. Install Dependencies </br>
 Run the following command to install necessary dependencies:
    ```sh
